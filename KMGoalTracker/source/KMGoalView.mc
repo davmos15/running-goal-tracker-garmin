@@ -374,6 +374,8 @@ class KMGoalView extends WatchUi.View {
     // Update daily distance accumulation in Storage.
     // Tracks today's distance via ActivityMonitor, accumulates previous days.
     // Resets when the goal period (year or month) changes.
+    // Protects against mid-day distance resets (sync, activity save) and
+    // recovers missed days using ActivityMonitor history when available.
     function updateAccumulation(year, month, day, isYearly) {
         var storedYear = Storage.getValue("lastYear");
         var storedMonth = Storage.getValue("lastMonth");
@@ -398,8 +400,17 @@ class KMGoalView extends WatchUi.View {
             accKm = 0.0;
             lastDayDist = 0;
         } else if (storedDay != null && storedDay != day) {
-            // New day - add previous day's final distance to accumulated
+            // Day changed - finalize stored day's distance
             accKm = accKm + (lastDayDist.toFloat() / 100000.0);
+
+            // Backfill any intermediate missed days from ActivityMonitor history
+            if (storedYear != null && storedMonth != null) {
+                var gap = daysBetween(storedYear, storedMonth, storedDay, year, month, day);
+                if (gap > 1) {
+                    accKm = accKm + backfillFromHistory(gap - 1);
+                }
+            }
+
             lastDayDist = 0;
         }
 
@@ -410,6 +421,12 @@ class KMGoalView extends WatchUi.View {
             if (monitorInfo != null && monitorInfo has :distance && monitorInfo.distance != null) {
                 todayDist = monitorInfo.distance;
             }
+        }
+
+        // Protect against mid-day distance resets (sync, activity save, etc.).
+        // Within the same day, today's distance should only increase, never decrease.
+        if (!periodReset && storedDay != null && storedDay == day && todayDist < lastDayDist) {
+            todayDist = lastDayDist;
         }
 
         // Persist to Storage
@@ -427,15 +444,50 @@ class KMGoalView extends WatchUi.View {
         return accKm.toFloat();
     }
 
-    // Get today's live distance in km
+    // Get today's distance in km (uses stored max-protected value)
     function getTodayKm() {
-        if (Toybox has :ActivityMonitor && ActivityMonitor has :getInfo) {
-            var monitorInfo = ActivityMonitor.getInfo();
-            if (monitorInfo != null && monitorInfo has :distance && monitorInfo.distance != null) {
-                return monitorInfo.distance.toFloat() / 100000.0;
-            }
+        var lastDayDist = Storage.getValue("lastDayDist");
+        if (lastDayDist == null) { return 0.0; }
+        return lastDayDist.toFloat() / 100000.0;
+    }
+
+    // Calculate days between two dates (same year or crossing one year boundary)
+    function daysBetween(fromYear, fromMonth, fromDay, toYear, toMonth, toDay) {
+        var fromDOY = getDayOfYear(fromYear, fromMonth, fromDay);
+        var toDOY = getDayOfYear(toYear, toMonth, toDay);
+        if (fromYear == toYear) {
+            return toDOY - fromDOY;
         }
-        return 0.0;
+        var daysInFromYear = isLeapYear(fromYear) ? 366 : 365;
+        return (daysInFromYear - fromDOY) + toDOY;
+    }
+
+    // Recover distance for missed intermediate days from ActivityMonitor history.
+    // Returns total km for up to 'count' recent history days, or 0 if unavailable.
+    function backfillFromHistory(count) {
+        if (!(Toybox has :ActivityMonitor) || !(ActivityMonitor has :getHistory)) {
+            return 0.0;
+        }
+        try {
+            var history = ActivityMonitor.getHistory();
+            if (history == null || !(history has :size) || history.size() <= 1) {
+                return 0.0;
+            }
+            var totalKm = 0.0;
+            var limit = count;
+            if (limit > history.size() - 1) {
+                limit = history.size() - 1;
+            }
+            for (var i = 1; i <= limit; i++) {
+                var entry = history[i];
+                if (entry != null && entry has :distance && entry.distance != null) {
+                    totalKm = totalKm + (entry.distance.toFloat() / 100000.0);
+                }
+            }
+            return totalKm;
+        } catch (e) {
+            return 0.0;
+        }
     }
 
     // Helper: Check if leap year

@@ -73,13 +73,22 @@ class KMGoalGlanceView extends WatchUi.GlanceView {
     }
 
     hidden function getTodayKm() {
+        var todayKm = 0.0;
         if (Toybox has :ActivityMonitor && ActivityMonitor has :getInfo) {
             var monitorInfo = ActivityMonitor.getInfo();
             if (monitorInfo != null && monitorInfo has :distance && monitorInfo.distance != null) {
-                return monitorInfo.distance.toFloat() / 100000.0;
+                todayKm = monitorInfo.distance.toFloat() / 100000.0;
             }
         }
-        return 0.0;
+        // Use stored value as floor to protect against sync resets
+        var storedDist = Storage.getValue("lastDayDist");
+        if (storedDist != null) {
+            var storedKm = storedDist.toFloat() / 100000.0;
+            if (storedKm > todayKm) {
+                todayKm = storedKm;
+            }
+        }
+        return todayKm;
     }
 
     hidden function formatGlanceNum(num) {
