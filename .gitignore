@@ -1,0 +1,49 @@
+# Build output
+KMGoalTracker/bin/
+*.prg
+*.iq
+*.debug.xml
+
+# Developer keys - NEVER commit
+*.der
+*.pem
+*.p12
+*.pfx
+developer_key.*
+
+# Claude Code local config
+.claude/
+
+# IDE / editor files
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+nul
+
+# Garmin SDK build artifacts
+gen/
+external-mir/
+internal-mir/
+mir/
+*.settings.json
+
+# Temp and log files
+*.log
+*.tmp
+
+# Development files not for distribution
+publishing-guide.md
+BUILD_GUIDE_STEP_COUNTER.md
+*.zip
+
+# Root-level screenshots and images (not store_assets/)
+/Initial Screen.png
+/Screen *.png
+/hero_*.png
+/store_icon_*.png

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<properties>
+    <property id="goalType" type="number">0</property>
+    <property id="goal" type="number">2026</property>
+    <property id="startingDist" type="number">0</property>
+    <property id="units" type="number">0</property>
+    <property id="accentColor" type="number">0</property>
+    <property id="behindColor" type="number">3</property>
+    <property id="aheadColor" type="number">1</property>
+</properties>

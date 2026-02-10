@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<settings>
+    <setting propertyKey="@Properties.goalType" title="@Strings.GoalTypeTitle">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.Yearly</listEntry>
+            <listEntry value="1">@Strings.Monthly</listEntry>
+        </settingConfig>
+    </setting>
+
+    <setting propertyKey="@Properties.goal" title="@Strings.GoalTitle">
+        <settingConfig type="numeric" min="1" max="50000" />
+    </setting>
+
+    <setting propertyKey="@Properties.startingDist" title="@Strings.StartingDistTitle">
+        <settingConfig type="numeric" min="0" max="50000" />
+    </setting>
+
+    <setting propertyKey="@Properties.units" title="@Strings.UnitsTitle">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.Kilometers</listEntry>
+            <listEntry value="1">@Strings.Miles</listEntry>
+        </settingConfig>
+    </setting>
+
+    <setting propertyKey="@Properties.accentColor" title="@Strings.AccentColorTitle">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.ColorBlue</listEntry>
+            <listEntry value="1">@Strings.ColorGreen</listEntry>
+            <listEntry value="2">@Strings.ColorOrange</listEntry>
+            <listEntry value="3">@Strings.ColorRed</listEntry>
+            <listEntry value="4">@Strings.ColorPurple</listEntry>
+            <listEntry value="5">@Strings.ColorCyan</listEntry>
+            <listEntry value="6">@Strings.ColorYellow</listEntry>
+            <listEntry value="7">@Strings.ColorWhite</listEntry>
+        </settingConfig>
+    </setting>
+
+    <setting propertyKey="@Properties.behindColor" title="@Strings.BehindColorTitle">
+        <settingConfig type="list">
+            <listEntry value="3">@Strings.ColorRed</listEntry>
+            <listEntry value="2">@Strings.ColorOrange</listEntry>
+            <listEntry value="6">@Strings.ColorYellow</listEntry>
+            <listEntry value="4">@Strings.ColorPurple</listEntry>
+        </settingConfig>
+    </setting>
+
+    <setting propertyKey="@Properties.aheadColor" title="@Strings.AheadColorTitle">
+        <settingConfig type="list">
+            <listEntry value="1">@Strings.ColorGreen</listEntry>
+            <listEntry value="0">@Strings.ColorBlue</listEntry>
+            <listEntry value="5">@Strings.ColorCyan</listEntry>
+            <listEntry value="7">@Strings.ColorWhite</listEntry>
+        </settingConfig>
+    </setting>
+</settings>
