@@ -6,6 +6,8 @@ using Toybox.Application;
 using Toybox.Application.Properties;
 using Toybox.Application.Storage;
 using Toybox.ActivityMonitor;
+using Toybox.UserProfile;
+using Toybox.Activity;
 using Toybox.Lang;
 
 class KMGoalView extends WatchUi.View {
@@ -134,10 +136,14 @@ class KMGoalView extends WatchUi.View {
 
         var daysRemaining = daysInPeriod - currentDayOfPeriod;
 
-        // Total distance: starting + accumulated + today
+        // Total distance: starting + accumulated (+ today's live distance in fallback mode)
         // startingDist and goal are in user's chosen unit
         // accumulated and today are in km, convert to user unit
-        var trackedDist = (getAccumulatedKm() + getTodayKm()) * unitConversion;
+        var todayKm = 0.0;
+        if (Storage.getValue("runningOnly") != true) {
+            todayKm = getTodayKm();
+        }
+        var trackedDist = (getAccumulatedKm() + todayKm) * unitConversion;
         var completed = startingDist.toFloat() + trackedDist;
         var remaining = goal.toFloat() - completed;
         if (remaining < 0) { remaining = 0.0; }
@@ -371,20 +377,16 @@ class KMGoalView extends WatchUi.View {
         return defaultVal;
     }
 
-    // Update daily distance accumulation in Storage.
-    // Tracks today's distance via ActivityMonitor, accumulates previous days.
-    // Resets when the goal period (year or month) changes.
-    // Protects against mid-day distance resets (sync, activity save) and
-    // recovers missed days using ActivityMonitor history when available.
+    // Update distance accumulation in Storage.
+    // Uses UserProfile.getUserActivityHistory() to count only RUNNING activities
+    // when available (API 3.3.0+). Falls back to ActivityMonitor (all activities)
+    // on older devices.
     function updateAccumulation(year, month, day, isYearly) {
         var storedYear = Storage.getValue("lastYear");
         var storedMonth = Storage.getValue("lastMonth");
-        var storedDay = Storage.getValue("lastDay");
         var accKm = Storage.getValue("accKm");
-        var lastDayDist = Storage.getValue("lastDayDist");
 
         if (accKm == null) { accKm = 0.0; }
-        if (lastDayDist == null) { lastDayDist = 0; }
 
         // Check for period rollover (new year or new month)
         var periodReset = false;
@@ -398,23 +400,39 @@ class KMGoalView extends WatchUi.View {
 
         if (periodReset) {
             accKm = 0.0;
-            lastDayDist = 0;
-        } else if (storedDay != null && storedDay != day) {
-            // Day changed - finalize stored day's distance
+            Storage.setValue("lastProcessedTime", null);
+            Storage.setValue("lastDayDist", null);
+        }
+
+        // Try running-only tracking via UserProfile API (API 3.3.0+)
+        if (Toybox has :UserProfile && UserProfile has :getUserActivityHistory) {
+            accKm = accKm + scanRunningActivities(year, month, isYearly);
+            Storage.setValue("accKm", accKm);
+            Storage.setValue("lastYear", year);
+            Storage.setValue("lastMonth", month);
+            Storage.setValue("lastDay", day);
+            Storage.setValue("runningOnly", true);
+            return;
+        }
+
+        // Fallback for older devices: ActivityMonitor (counts ALL activities)
+        Storage.setValue("runningOnly", false);
+        var storedDay = Storage.getValue("lastDay");
+        var lastDayDist = Storage.getValue("lastDayDist");
+        if (lastDayDist == null) { lastDayDist = 0; }
+
+        if (!periodReset && storedDay != null && storedDay != day) {
             accKm = accKm + (lastDayDist.toFloat() / 100000.0);
 
-            // Backfill any intermediate missed days from ActivityMonitor history
             if (storedYear != null && storedMonth != null) {
                 var gap = daysBetween(storedYear, storedMonth, storedDay, year, month, day);
                 if (gap > 1) {
                     accKm = accKm + backfillFromHistory(gap - 1);
                 }
             }
-
             lastDayDist = 0;
         }
 
-        // Get today's live distance from ActivityMonitor
         var todayDist = 0;
         if (Toybox has :ActivityMonitor && ActivityMonitor has :getInfo) {
             var monitorInfo = ActivityMonitor.getInfo();
@@ -423,18 +441,68 @@ class KMGoalView extends WatchUi.View {
             }
         }
 
-        // Protect against mid-day distance resets (sync, activity save, etc.).
-        // Within the same day, today's distance should only increase, never decrease.
         if (!periodReset && storedDay != null && storedDay == day && todayDist < lastDayDist) {
             todayDist = lastDayDist;
         }
 
-        // Persist to Storage
         Storage.setValue("accKm", accKm);
         Storage.setValue("lastYear", year);
         Storage.setValue("lastMonth", month);
         Storage.setValue("lastDay", day);
         Storage.setValue("lastDayDist", todayDist);
+    }
+
+    // Scan device activity history for completed RUNNING activities.
+    // Only counts new activities since last scan to avoid double-counting.
+    // Distance from UserProfile is in meters (not cm like ActivityMonitor).
+    function scanRunningActivities(year, month, isYearly) {
+        var iterator = UserProfile.getUserActivityHistory();
+        if (iterator == null) {
+            return 0.0;
+        }
+
+        var lastProcessedTime = Storage.getValue("lastProcessedTime");
+        if (lastProcessedTime == null) { lastProcessedTime = 0; }
+
+        // Calculate period start as a Moment value for comparison
+        var periodStartOptions = {
+            :year => year,
+            :month => isYearly ? 1 : month,
+            :day => 1,
+            :hour => 0,
+            :minute => 0,
+            :second => 0
+        };
+        var periodStart = Gregorian.moment(periodStartOptions).value();
+
+        var newKm = 0.0;
+        var maxTime = lastProcessedTime;
+        var activity = iterator.next();
+
+        while (activity != null) {
+            if (activity.type != null &&
+                activity.startTime != null &&
+                activity.distance != null &&
+                activity.type == Activity.SPORT_RUNNING) {
+
+                var st = activity.startTime.value();
+
+                // Only count activities in current period not yet processed
+                if (st > lastProcessedTime && st >= periodStart) {
+                    newKm = newKm + (activity.distance.toFloat() / 1000.0);
+                    if (st > maxTime) {
+                        maxTime = st;
+                    }
+                }
+            }
+            activity = iterator.next();
+        }
+
+        if (maxTime > lastProcessedTime) {
+            Storage.setValue("lastProcessedTime", maxTime);
+        }
+
+        return newKm;
     }
 
     // Get accumulated km from previous days (from Storage)
